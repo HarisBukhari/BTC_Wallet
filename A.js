@@ -1,4 +1,4 @@
-const bitcoin = require('bitcoinjs-lib');
+const bitcoin = require('bitcoinjs-lib-zcash');
 const axios = require('axios');
 
 const TESTNET = true;
@@ -7,8 +7,11 @@ async function sendBitcoin(receiverAddress, amountToSend, privateKey) {
   try {
     const satoshiToSend = Math.round(amountToSend * 1e8); // Convert BTC to satoshis
 
+    // Derive the key pair from the private key
+    const keyPair = bitcoin.ECPair.fromWIF(privateKey, TESTNET ? bitcoin.networks.testnet : bitcoin.networks.bitcoin);
+
     // Fetch UTXOs from the source address
-    const sourceAddress = bitcoin.payments.p2pkh({ pubkey: bitcoin.ECPair.fromWIF(privateKey).publicKey, network: TESTNET ? bitcoin.networks.testnet : bitcoin.networks.bitcoin }).address;
+    const sourceAddress = bitcoin.payments.p2pkh({ pubkey: keyPair.publicKey, network: TESTNET ? bitcoin.networks.testnet : bitcoin.networks.bitcoin }).address;
     const utxosResponse = await axios.get(`https://blockstream.info/${TESTNET ? 'testnet/' : ''}api/address/${sourceAddress}/utxo`);
     const utxos = utxosResponse.data;
 
@@ -33,7 +36,7 @@ async function sendBitcoin(receiverAddress, amountToSend, privateKey) {
 
     // Sign the transaction with private key
     utxos.forEach((utxo, index) => {
-      txb.sign(index, bitcoin.ECPair.fromWIF(privateKey));
+      txb.sign(index, keyPair);
     });
 
     // Build and serialize the transaction
