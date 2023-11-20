@@ -1,0 +1,24 @@
+{
+  "name": "btc_wallet",
+  "version": "1.0.0",
+  "description": "",
+  "main": "App.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/HarisBukhari/BTC_Wallet.git"
+  },
+  "author": "Haris Bukhari",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/HarisBukhari/BTC_Wallet/issues"
+  },
+  "homepage": "https://github.com/HarisBukhari/BTC_Wallet#readme",
+  "dependencies": {
+    "axios": "^1.6.2",
+    "bitcore-lib": "^10.0.17",
+    "bitcore-mnemonic": "^10.0.17"
+  }
+}
