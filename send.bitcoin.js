@@ -1,86 +1,81 @@
-// sending bitcoin
 const axios = require("axios");
 const bitcore = require("bitcore-lib");
-const TESTNET = true
 
-module.exports = sendBitcoin = async (recieverAddress, amountToSend) => {
+const TESTNET = true;
+
+module.exports = async function sendBitcoin(receiverAddress, amountToSend) {
   try {
-    const privateKey =
-      "ceb461989ef225cab3457d8063a418294db12151cd8c6b554b687404b6fe467b";
-    const sourceAddress = "mvWqrftxCJa5eSKp229gkZbMf2XXrfZe9p";
+    const privateKey ="ceb461989ef225cab3457d8063a418294db12151cd8c6b554b687404b6fe467b";
+    const sourceAddress = "mkN1csfky8jJULACdQb4yeNjP5Aw3XBihM";
     const satoshiToSend = amountToSend * 100000000;
-    let fee = 0;
-    let inputCount = 0;
-    let outputCount = 2;
 
-    const recommendedFee = await axios.get(
+    // Fetch recommended fee from external API
+    const recommendedFeeResponse = await axios.get(
       "https://bitcoinfees.earn.com/api/v1/fees/recommended"
     );
+    const feeRate = TESTNET ? 1 : recommendedFeeResponse.data.hourFee / 3; // satoshi per byte
 
-    const transaction = new bitcore.Transaction();
-    let totalAmountAvailable = 0;
+    // Fetch UTXOs from the source address
+    const utxosResponse = await axios.get(
+      `https://blockstream.info/${TESTNET ? "testnet/" : ""}api/address/${sourceAddress}/utxo`
+    );
+    const utxos = utxosResponse.data;
 
-    let inputs = [];
-    const resp = await axios({
-        method: "GET",
-        url: `https://blockstream.info/testnet/api/address/${sourceAddress}/utxo`,
-    });
-    const utxos = resp.data
+    // Calculate total amount available in the source address
+    const totalAmountAvailable = utxos.reduce(
+      (total, utxo) => total + utxo.value,
+      0
+    );
 
-    for (const utxo of utxos) {
-      let input = {};
-      input.satoshis = utxo.value;
-      input.script = bitcore.Script.buildPublicKeyHashOut(sourceAddress).toHex();
-      input.address = sourceAddress;
-      input.txId = utxo.txid;
-      input.outputIndex = utxo.vout;
-      totalAmountAvailable += utxo.value;
-      inputCount += 1;
-      inputs.push(input);
-    }
+    // Prepare inputs for the transaction
+    const inputs = utxos.map((utxo) => ({
+      satoshis: utxo.value,
+      script: bitcore.Script.buildPublicKeyHashOut(sourceAddress).toHex(),
+      address: sourceAddress,
+      txId: utxo.txid,
+      outputIndex: utxo.vout,
+    }));
 
-    /**
-     * In a bitcoin transaction, the inputs contribute 180 bytes each to the transaction,
-     * while the output contributes 34 bytes each to the transaction. Then there is an extra 10 bytes you add or subtract
-     * from the transaction as well.
-     * */
-
+    // Calculate transaction size
+    const inputCount = utxos.length;
+    const outputCount = 2; // recipient + change
     const transactionSize =
       inputCount * 180 + outputCount * 34 + 10 - inputCount;
 
-    fee = transactionSize * recommendedFee.data.hourFee / 3; // satoshi per byte
-    if (TESTNET) {
-      fee = transactionSize * 1 // 1 sat/byte is fine for testnet
-    }
+    // Calculate fee
+    const fee = Math.round(transactionSize * feeRate);
+
+    // Check if the balance is sufficient for the transaction
     if (totalAmountAvailable - satoshiToSend - fee < 0) {
       throw new Error("Balance is too low for this transaction");
     }
-    //Set transaction input
-    transaction.from(inputs);
 
-    // set the recieving address and the amount to send
-    transaction.to(recieverAddress, satoshiToSend);
+    // Create a new Bitcoin transaction
+    const transaction = new bitcore.Transaction()
+      .from(inputs)
+      .to(receiverAddress, satoshiToSend)
+      .change(sourceAddress)
+      .fee(fee)
+      .sign(privateKey);
 
-    // Set change address - Address to receive the left over funds after transfer
-    transaction.change(sourceAddress);
-
-    //manually set transaction fees: 20 satoshis per byte
-    transaction.fee(Math.round(fee));
-
-    // Sign transaction with your private key
-    transaction.sign(privateKey);
-
-    // serialize Transactions
+    // Serialize transaction
     const serializedTransaction = transaction.serialize();
 
     // Send transaction
-    const result = await axios({
-      method: "POST",
-      url: `https://blockstream.info/testnet/api/tx`,
-      data: serializedTransaction,
-    });
+    const result = await axios.post(
+      `https://blockstream.info/${TESTNET ? "testnet/" : ""}api/tx`,
+      serializedTransaction
+    );
+
+    // Log success
+    console.log("Transaction successful:", result.data);
+
     return result.data;
   } catch (error) {
-    return error;
+    // Log error
+    console.error("Error:", error.message);
+
+    // Return a custom error message or handle it as needed
+    return { error: "An error occurred during the transaction." };
   }
 };
