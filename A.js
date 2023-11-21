@@ -17,7 +17,7 @@ async function sendBitcoin(receiverAddress, amountToSend, privateKey) {
 
     // Prepare inputs for the transaction
     const txb = new bitcoin.TransactionBuilder(TESTNET ? bitcoin.networks.testnet : bitcoin.networks.bitcoin);
-    
+
     utxos.forEach(utxo => {
       txb.addInput(utxo.txid, utxo.vout);
     });
